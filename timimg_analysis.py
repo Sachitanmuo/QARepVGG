@@ -12,7 +12,7 @@ import time
 model = create_QARepVGGBlockV2_A0()
 inputs = torch.randn(1, 3, 224, 224)
 layer_times = []
-iterations = 1
+iterations = 100
 def profile_layer(layer, inputs):
     with torch.autograd.profiler.profile(use_cuda=False) as prof:
         layer(inputs)
