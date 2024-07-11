@@ -1,0 +1,1 @@
+python3 main.py --data-path ./data/  --data-set CIFAR  --batch-size 128 --epochs 100 --model QARepVGGV2-A0

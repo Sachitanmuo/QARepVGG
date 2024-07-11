@@ -3,7 +3,7 @@ from repvgg import *
 import torch.quantization
 
 #first analysis one layer
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 path = './pattern/'
 #layer = QARepVGGBlockV2()
 
@@ -55,6 +55,7 @@ def gen_layer_pattern(layer, file):
     print("bn total running var shape:", bn_total_running_var.shape)
 
 def gen_layer_pattern_deploy(layer, file):
+    '''
     reparam_weights = layer.rbr_reparam.state_dict()['weight']
     reparam_bias = layer.rbr_reparam.state_dict()['bias']
     file.write(f"3x3 kernel: {flatten_and_format(reparam_weights)}\n")
@@ -62,28 +63,37 @@ def gen_layer_pattern_deploy(layer, file):
 
     print("reparam 3x3 kernel shape:", reparam_weights.shape)
     print("bias shape:", reparam_bias.shape)
-
+    '''
+    print(layer.rbr_reparam.state_dict())
 def main():
 
     #training stage
-    model = create_QARepVGGBlockV2_A0(deploy= False).to(device)
+    #repvgg_build_func = get_RepVGG_func_by_name('QARepVGGV2-A0')
+    #model = repvgg_build_func(deploy = False).to(device)
+    model = create_QARepVGGBlockV2_A0(deploy=False).to(device)
+    print(model)
+    model.load_state_dict(torch.load('QARepVGGV2-A0testtest/best_checkpoint.pth'))
+    #model = create_QARepVGGBlockV2_A0(deploy= False).to(device)
     model.eval()
     stage0_weights = model.stage0.state_dict()
     
-    #torch.backends.quantized.engine = 'fbgemm'
-    #torch.backends.quantized.engine = 'qnnpack'
-    #model.qconfig = torch.quantization.get_default_qconfig('qnnpack')
-    torch.quantization.prepare(model, inplace=True)
-    torch.quantization.convert(model, inplace=True)
 
 
     with open('./pattern/stage_0_weights.txt', 'w') as file:
         gen_layer_pattern(model.stage0, file)
 
     model.stage0.switch_to_deploy()
-    #print(model.stage0)
+    print(model.stage0.rbr_reparam.state_dict())
+    torch.backends.quantized.engine = 'fbgemm'
+    #torch.backends.quantized.engine = 'qnnpack'
+    model.stage0.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+    torch.quantization.prepare(model.stage0, inplace=True)
+    torch.quantization.convert(model.stage0, inplace=True)
+    print(model.stage0)
     with open('./pattern/stage_0_weights_deploy.txt', 'w') as file:
         gen_layer_pattern_deploy(model.stage0, file)
+
+    torch.save(model.stage0.state_dict(), 'test.pth')
 
 if __name__ == "__main__":
     main()
