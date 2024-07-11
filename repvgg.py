@@ -1345,7 +1345,7 @@ def create_QARepVGGBlockV1_A0(deploy=False):
                   width_multiplier=[0.75, 0.75, 0.75, 2.5], override_groups_map=None, deploy=deploy, block_cls=QARepVGGBlockV1)
 
 def create_QARepVGGBlockV2_A0(deploy=False):
-    return RepVGG(num_blocks=[2, 4, 14, 1], num_classes=1000,
+    return RepVGG(num_blocks=[2, 4, 14, 1], num_classes=100, #modify to 100 since we use CIFAR dataset
                   width_multiplier=[0.75, 0.75, 0.75, 2.5], override_groups_map=None, deploy=deploy, block_cls=QARepVGGBlockV2)
 
 

@@ -1,1 +1,1 @@
-   python3 test.py ./data/cifar-100-python//test train ./QARepVGGV2-A0testtest/best_checkpoint.pth --arch QARepVGGV2-A0 --batch-size 1
+   python3 test.py ./data/ train ./QARepVGGV2-A0testtest/best_checkpoint.pth --arch QARepVGGV2-A0 --batch-size 1

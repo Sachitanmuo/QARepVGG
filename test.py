@@ -26,6 +26,7 @@ parser.add_argument('-r', '--resolution', default=224, type=int,
                     metavar='R',
                     help='resolution (default: 224) for test')
 
+
 def test():
     args = parser.parse_args()
 

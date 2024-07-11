@@ -52,7 +52,11 @@ class INatDataset(ImageFolder):
 
     # __getitem__ and __len__ inherited from ImageFolder
 
-
+transform_CIFAR100 = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
+])
 def build_dataset(is_train, args):
     from utils import special_arch
     if special_arch(args): #'Rep' in args.model or 'gre' in args.model or 'resnet' in args.model:
@@ -92,7 +96,7 @@ def build_dataset(is_train, args):
 
 
 def build_transform(is_train, args):
-    resize_im = args.input_size > 32
+    resize_im = args.input_size > 32 
     if is_train:
         # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
@@ -121,5 +125,5 @@ def build_transform(is_train, args):
         t.append(transforms.CenterCrop(args.eval_size))
 
     t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
+    t.append(transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761]))
     return transforms.Compose(t)
