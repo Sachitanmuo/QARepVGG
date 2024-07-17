@@ -9,7 +9,13 @@ path = './pattern/'
 
 
 def flatten_and_format(state_dict):
-    return ' '.join(map(str, state_dict.flatten().tolist()))
+    return '\n'.join(map(str, state_dict.flatten().tolist()))
+
+def tensor_to_binary(tensor):
+    array = tensor.numpy()
+    binary_array = [format(x, '08b') for x in array.flatten()]
+    return binary_array
+
 
 def gen_layer_pattern(layer, file):
     threebythree_weights = layer.rbr_dense.conv.state_dict()['weight']
@@ -25,10 +31,40 @@ def gen_layer_pattern(layer, file):
     bn_total_running_mean = layer.bn.state_dict()['running_mean']
     bn_total_running_var = layer.bn.state_dict()['running_var']
     bn_total_nums_batches_tracked = layer.bn.state_dict()['num_batches_tracked']
+    eps = 1e-5
+
+    std = (bn3x3_running_var + eps).sqrt()
+    t = (bn3x3_weights/std).reshape(-1, 1, 1, 1)
+
+    with open("./pattern/kernel_3x3.txt", "w") as f:
+        f.write(flatten_and_format(threebythree_weights))
+    with open("./pattern/running_mean.txt", "w") as f:
+        f.write(flatten_and_format(bn3x3_running_mean))
+    with open("./pattern/runnung_var.txt", "w") as f:
+        f.write(flatten_and_format(bn3x3_running_var))
+    with open("./pattern/gamma.txt", "w") as f:
+        f.write(flatten_and_format(bn3x3_weights))
+    with open("./pattern/beta.txt", "w") as f:
+        f.write(flatten_and_format(bn3x3_bias))
+    with open("./pattern/kernel_1x1.txt", "w") as f:
+        f.write(flatten_and_format(onebyone_weights))
+    with open("./pattern/last_running_mean.txt", "w") as f:
+        f.write(flatten_and_format(bn_total_running_mean))
+    with open("./pattern/last_running_var.txt", "w") as f:
+        f.write(flatten_and_format(bn_total_running_var))
+    with open("./pattern/last_gamma.txt", "w") as f:
+        f.write(flatten_and_format(bn_total_weights))
+    with open("./pattern/last_beta.txt", "w") as f:
+        f.write(flatten_and_format(bn_total_bias))
+    
+    with open("./pattern/fusebn_weights.txt", "w") as f:
+        f.write(flatten_and_format(threebythree_weights*t))
+    with open("./pattern/fusebn_bias.txt", "w") as f:
+        f.write(flatten_and_format(bn3x3_bias - bn3x3_running_mean* bn3x3_weights / std))
+    
     
 
-        #return ' '.join(map(str, state_dict))
-    
+    '''
     file.write(f"3x3 kernel: {flatten_and_format(threebythree_weights)}\n")
     file.write(f"1x1 kernel: {flatten_and_format(onebyone_weights)}\n")
     file.write(f"bn3x3_weights: {flatten_and_format(bn3x3_weights)}\n")
@@ -53,19 +89,30 @@ def gen_layer_pattern(layer, file):
     print("bn total bias shape:", bn_total_bias.shape)
     print("bn total running mean shape:", bn_total_running_mean.shape)
     print("bn total running var shape:", bn_total_running_var.shape)
+    '''
 
 def gen_layer_pattern_deploy(layer, file):
     reparam_weights = layer.rbr_reparam.state_dict()['weight']
     reparam_bias = layer.rbr_reparam.state_dict()['bias']
+    '''
     file.write(f"3x3 kernel: {flatten_and_format(reparam_weights)}\n")
     file.write(f"1x1 kernel: {flatten_and_format(reparam_bias)}\n")
 
     print("reparam 3x3 kernel shape:", reparam_weights.shape)
     print("bias shape:", reparam_bias.shape)
     print(layer.rbr_reparam.state_dict())
+    '''
+    with open("./pattern/reparam_kernel.txt", "w") as f:
+        f.write(flatten_and_format(reparam_weights))
+    with open("./pattern/reparam_bias.txt", "w") as f:
+        f.write(flatten_and_format(reparam_bias))
+    
 
 def gen_layer_pattern_deploy_quantized(layer, file):
-    print(layer.rbr_reparam.state_dict())
+    print(layer.rbr_reparam.state_dict()['weight'][0].int_repr())
+    x = tensor_to_binary(layer.rbr_reparam.state_dict()['weight'][0].int_repr())
+    print(x)
+
 
 def main():
     model = create_QARepVGGBlockV2_A0(deploy=False).to(device)
@@ -80,6 +127,8 @@ def main():
         gen_layer_pattern(model.stage0, file)
     model.stage0.switch_to_deploy()
 
+    with open('./pattern/stage_0_weights_deploy.txt', 'w') as file:
+        gen_layer_pattern_deploy(model.stage0, file)
 
     torch.backends.quantized.engine = 'fbgemm'
     model.stage0.qconfig = torch.quantization.get_default_qconfig('fbgemm')

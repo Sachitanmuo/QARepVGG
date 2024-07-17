@@ -5,9 +5,9 @@ import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from repvgg import create_QARepVGGBlockV2_A0
 from torchsummary import summary
-
+import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+device = "cpu"
 data_path = './data/'
 
 transform = transforms.Compose([
@@ -77,28 +77,46 @@ def switch(model):
     model.stage3[12].switch_to_deploy()
     model.stage3[13].switch_to_deploy()
     model.stage4[0].switch_to_deploy()
+def tensor_to_binary(tensor):
+    array = tensor.numpy()
+    binary_array = [format(x, '08b') for x in array.flatten()]
+    return binary_array
 
 def main():
     model = create_QARepVGGBlockV2_A0(deploy=False).to(device)
-    checkpoint = torch.load('QARepVGGV2-A0testtest/best_checkpoint.pth')
+    checkpoint = torch.load('QARepVGGV2-A0testtest/best_checkpoint_v3.pth')
     if 'model' in checkpoint:
         model.load_state_dict(checkpoint['model'])
     else:
         model.load_state_dict(checkpoint)
     model.eval()
     switch(model)
-    #top1_acc, top5_acc = evaluate(model, test_loader, device)
-    #print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%')
-    
-    model_cpu = model.to('cpu')
-    model_quantized = torch.quantization.quantize_dynamic(
-        model_cpu, {nn.Linear, nn.Conv2d}, dtype=torch.qint8
-    )
-    print(model_quantized.stage0.rbr_reparam.state_dict())
+    #print(model)
+    start_time = time.time()
+    top1_acc, top5_acc = evaluate(model, test_loader, device)
+    end_time = time.time()
+    exe_time = end_time - start_time
+    print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%, inference time = {exe_time} sec')
 
-    
-    #top1_acc_quant, top5_acc_quant = evaluate(model_quantized, test_loader, 'cpu')
-    #print(f'Quantized Model - Top-1 Accuracy: {top1_acc_quant:.2f}%, Top-5 Accuracy: {top5_acc_quant:.2f}%')
+    model.quant = torch.quantization.QuantStub()
+    model.dequant = torch.quantization.DeQuantStub()
+    backend = 'fbgemm'
+    #backend = "qnnpack"
+    model.qconfig = torch.quantization.get_default_qconfig(backend)
+    torch.backends.quantized.engine = backend
+    prepared_model = torch.quantization.prepare(model, inplace=False)
+    #for images, _ in test_loader:
+    #    prepared_model.quant(images)
+    quantized_model = torch.quantization.convert(prepared_model, inplace=False)
+    #print(quantized_model)
+    #print(quantized_model.stage0.rbr_reparam.state_dict())
+    inputs = torch.randn(1, 3, 224, 224)
+    #quantized_model(inputs)
+    start_time = time.time()
+    top1_acc_quant, top5_acc_quant = evaluate(quantized_model, test_loader, device)
+    end_time = time.time()
+    exe_time = end_time - start_time
+    print(f'Quantized Model - Top-1 Accuracy: {top1_acc_quant:.2f}%, Top-5 Accuracy: {top5_acc_quant:.2f}%, inference time: {exe_time}sec')
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from utils import my_scaler
 import torch.nn.init as init
 from functools import partial
 from timm.models.layers import DropPath
+import torch.quantization
 
 
 def conv_bn(in_channels, out_channels, kernel_size, stride, padding, groups=1):
@@ -1217,6 +1218,9 @@ class RepVGG(nn.Module):
         self.gap = nn.AdaptiveAvgPool2d(output_size=1)
         self.linear = nn.Linear(int(512 * width_multiplier[3]), num_classes)
 
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
     def _init_weights(self, m):
         import math
         from timm.models.vision_transformer  import trunc_normal_
@@ -1249,6 +1253,7 @@ class RepVGG(nn.Module):
         return nn.Sequential(*blocks)
 
     def forward(self, x):
+        x = self.quant(x)
         out = self.stage0(x)
         out = self.stage1(out)
         out = self.stage2(out)
@@ -1257,6 +1262,7 @@ class RepVGG(nn.Module):
         out = self.gap(out)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
+        out = self.dequant(out)
         return out
 
 
@@ -1695,4 +1701,31 @@ def repvgg_model_convert(model:torch.nn.Module, save_path=None, do_copy=True):
     if save_path is not None:
         torch.save({'model': model.state_dict()}, save_path)
     return model
+
+def switch(model):
+    model.stage0.switch_to_deploy()
+    model.stage1[0].switch_to_deploy()
+    model.stage1[1].switch_to_deploy()
+    model.stage2[0].switch_to_deploy()
+    model.stage2[1].switch_to_deploy()
+    model.stage2[2].switch_to_deploy()
+    model.stage2[3].switch_to_deploy()
+    model.stage3[0].switch_to_deploy()
+    model.stage3[1].switch_to_deploy()
+    model.stage3[2].switch_to_deploy()
+    model.stage3[3].switch_to_deploy()
+    model.stage3[4].switch_to_deploy()
+    model.stage3[5].switch_to_deploy()
+    model.stage3[6].switch_to_deploy()
+    model.stage3[7].switch_to_deploy()
+    model.stage3[8].switch_to_deploy()
+    model.stage3[9].switch_to_deploy()
+    model.stage3[10].switch_to_deploy()
+    model.stage3[11].switch_to_deploy()
+    model.stage3[12].switch_to_deploy()
+    model.stage3[13].switch_to_deploy()
+    model.stage4[0].switch_to_deploy()
+
+
+
 
