@@ -6,39 +6,23 @@ from torch.utils.data import DataLoader
 from repvgg import create_QARepVGGBlockV2_A0
 from torchsummary import summary
 import time
+from pytorch_quantization import nn as quant_nn
+from pytorch_quantization import quant_modules
 from pytorch_quantization.tensor_quant import QuantDescriptor
 from pytorch_quantization.nn.modules.tensor_quantizer import TensorQuantizer
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "cpu"
+#device = "cpu"
 data_path = './data/'
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
+    #transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
 ])
 
 test_dataset = datasets.CIFAR100(root=data_path, train=False, download=True, transform=transform)
 test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=4)
-
-class QuantizedRepVGG(nn.Module):
-    def __init__(self, model):
-        super(QuantizedRepVGG, self).__init__()
-        #self.quant = quant_nn.TensorQuantizer(QuantDescriptor(QUANT_DESC_8BIT_CONV2D_WEIGHT_PER_CHANNEL))
-        #self.input_quantizer = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, calib_method="histogram"))
-        #self.weight_quantizer = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, calib_method="histogram"))
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-        self.model = model
-        #self.dequant = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, fake_quant=False, calib_method='histogram'))
-
-    def forward(self, x):
-        x = self.quant(x)
-        x = self.model(x)
-        x = self.dequant(x)
-        return x
 
 def accuracy(output, target, topk=(1, 5)):
     maxk = max(topk)
@@ -73,6 +57,7 @@ def evaluate(model, data_loader, device):
     top5_acc /= total
 
     return top1_acc, top5_acc
+
 def switch(model):
     model.stage0.switch_to_deploy()
     model.stage1[0].switch_to_deploy()
@@ -96,10 +81,22 @@ def switch(model):
     model.stage3[12].switch_to_deploy()
     model.stage3[13].switch_to_deploy()
     model.stage4[0].switch_to_deploy()
-def tensor_to_binary(tensor):
-    array = tensor.numpy()
-    binary_array = [format(x, '08b') for x in array.flatten()]
-    return binary_array
+
+class QuantizedRepVGG(nn.Module):
+    def __init__(self, model):
+        super(QuantizedRepVGG, self).__init__()
+        #self.quant = quant_nn.TensorQuantizer(QuantDescriptor(QUANT_DESC_8BIT_CONV2D_WEIGHT_PER_CHANNEL))
+        #self.input_quantizer = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, calib_method="histogram"))
+        #self.weight_quantizer = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, calib_method="histogram"))
+        #self.quant = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, fake_quant=False, calib_method='histogram'))
+        self.model = model
+        #self.dequant = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, fake_quant=False, calib_method='histogram'))
+
+    def forward(self, x):
+        #x = self.quant(x)
+        x = self.model(x)
+        #x = self.dequant(x)
+        return x
 
 def main():
     model = create_QARepVGGBlockV2_A0(deploy=False).to(device)
@@ -110,35 +107,74 @@ def main():
         model.load_state_dict(checkpoint)
     model.eval()
     switch(model)
-    #print(model)
+    print(model)
+    #quantized_model = QuantizedRepVGG(model)
+
     start_time = time.time()
     top1_acc, top5_acc = evaluate(model, test_loader, device)
     end_time = time.time()
     exe_time = end_time - start_time
     print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%, inference time = {exe_time} sec')
 
-    quantized_model = QuantizedRepVGG(model)
-    backend = 'fbgemm'
-    #backend = "qnnpack"
-    quantized_model.qconfig = torch.quantization.get_default_qconfig(backend)
-    torch.backends.quantized.engine = backend
-    prepared_model = torch.quantization.prepare(quantized_model, inplace=False)
-    for images, _ in test_loader:
-        prepared_model.quant(images)
-    quantized_model = torch.quantization.convert(prepared_model, inplace=False)
-    #print(quantized_model)
-    #input()
-    inputs = torch.randn(1, 3, 224, 224)
-    quantized_model(inputs)
+
+    quant_modules.initialize()
+    #quant_desc_input = QuantDescriptor(num_bits=8, fake_quant=False, calib_method="histogram")
+    #quant_nn.QuantConv2d.set_default_quant_desc_input(quant_desc_input)
+    #quant_nn.QuantLinear.set_default_quant_desc_input(quant_desc_input)
+    quantized_model = create_QARepVGGBlockV2_A0(deploy=False).to(device)
+    checkpoint = torch.load('QARepVGGV2-A0testtest/best_checkpoint.pth')
+    if 'model' in checkpoint:
+        quantized_model.load_state_dict(checkpoint['model'])
+    else:
+        quantized_model.load_state_dict(checkpoint)
+    quantized_model.eval()
+    switch(quantized_model)
+    #input_quant_desc = QuantDescriptor(calib_method='histogram')
+    #weight_quant_desc = QuantDescriptor(calib_method='histogram', axis=(0,))
+    #quant_modules.initialize()
+    #quantized_model = QuantizedRepVGG(quantized_model)
+    
+    
+    #print(quantized_model.model.stage1[0].rbr_reparam.state_dict()['bias'][0].dtype)
+    # Calibration
+    #with torch.no_grad():
+    #    for images, _ in test_loader:
+    #        images = images.to(device)
+    #        quantized_model(images)
+    
+    #==========Calibration===================
+    # Find the TensorQuantizer and enable calibration
+    for name, module in quantized_model.named_modules():
+        if name.endswith('_quantizer'):
+            module.enable_calib()
+            module.disable_quant()  # Use full precision data to calibrate
+        #else:
+        #    module.disable()
+
+    # Feeding data samples
+    with torch.no_grad():
+        for images, _ in test_loader:
+            images = images.to(device)
+            quantized_model(images)
+
+    # Finalize calibration
+    for name, module in quantized_model.named_modules():
+        if name.endswith('_quantizer'):
+            module.load_calib_amax()
+            module.disable_calib()
+            module.enable_quant()
+        #else:
+        #    module.enable()
+    
+    quantized_model.cuda()
+    #========================================
+    #print(quantized_model.stage0.rbr_reparam.state_dict())
+    #quantized_model = quant_modules.convert_dequant(quantized_model)
     start_time = time.time()
     top1_acc_quant, top5_acc_quant = evaluate(quantized_model, test_loader, device)
     end_time = time.time()
     exe_time = end_time - start_time
-    print(f'Quantized Model - Top-1 Accuracy: {top1_acc_quant:.2f}%, Top-5 Accuracy: {top5_acc_quant:.2f}%, inference time: {exe_time}sec')
-
-    #=========use pytorch-quantization ============================
-
-
+    print(f'Quantized Model - Top-1 Accuracy: {top1_acc_quant:.2f}%, Top-5 Accuracy: {top5_acc_quant:.2f}%, inference time: {exe_time} sec')
 
 if __name__ == "__main__":
     main()

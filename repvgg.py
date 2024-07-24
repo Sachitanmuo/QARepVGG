@@ -8,7 +8,10 @@ import torch.nn.init as init
 from functools import partial
 from timm.models.layers import DropPath
 import torch.quantization
-
+from pytorch_quantization import nn as quant_nn
+from pytorch_quantization import quant_modules
+from pytorch_quantization.tensor_quant import QuantDescriptor
+from pytorch_quantization.nn.modules.tensor_quantizer import TensorQuantizer
 
 def conv_bn(in_channels, out_channels, kernel_size, stride, padding, groups=1):
     result = nn.Sequential()
@@ -310,6 +313,9 @@ class QARepVGGBlockV2(RepVGGBlock):
             self.rbr_1x1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, groups=groups, bias=False)
             self.rbr_identity = nn.Identity() if out_channels == in_channels and stride == 1 else None
         self._id_tensor = None
+        
+
+        
 
     def forward(self, inputs):
         if hasattr(self, 'rbr_reparam'):
@@ -1218,8 +1224,8 @@ class RepVGG(nn.Module):
         self.gap = nn.AdaptiveAvgPool2d(output_size=1)
         self.linear = nn.Linear(int(512 * width_multiplier[3]), num_classes)
 
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
+        #self.quant = torch.quantization.QuantStub()
+        #self.dequant = torch.quantization.DeQuantStub()
 
     def _init_weights(self, m):
         import math
@@ -1253,7 +1259,7 @@ class RepVGG(nn.Module):
         return nn.Sequential(*blocks)
 
     def forward(self, x):
-        x = self.quant(x)
+        #x = self.quant(x)
         out = self.stage0(x)
         out = self.stage1(out)
         out = self.stage2(out)
@@ -1262,7 +1268,7 @@ class RepVGG(nn.Module):
         out = self.gap(out)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        out = self.dequant(out)
+        #out = self.dequant(out)
         return out
 
 
