@@ -35,6 +35,8 @@ def main():
 
     #print(model)
     #input()
+
+    #summ(model)
     '''
     with torch.no_grad():
         output = model.stage0(image)
@@ -102,6 +104,7 @@ def main():
     #==============================================================
     print("========== Stage 0 ==========")
     output, output_quantized = quantize_1st_layer(model.stage0, image)
+    error_calc(output, output_quantized)
     print("=============================")
     # =========Test the quantization error after ReLU =============
     #      MSE After ReLU: 0.001088797813281417 (use original input)
@@ -113,40 +116,48 @@ def main():
     #input()
     #Stage 1
     print("========== Stage 1 ==========")
-    _, output_quantized = quantize_layer(model.stage1[0], output_quantized, q_range_unsigned= 16, q_range_signed= 0.5, gen_pattern = True)
+    _, output_quantized = quantize_layer(model.stage1[0], output_quantized, q_range_unsigned= 16, q_range_signed= 4, gen_pattern = True)
     output = model.stage1[0](output)
-    '''
-    _, output_quantized = quantize_layer(model.stage1[1], output_quantized, 16)
+    error_calc(output, output_quantized)
+    
+    _, output_quantized = quantize_layer(model.stage1[1], output_quantized, q_range_unsigned= 16, q_range_signed= 4, gen_pattern = False)
     output = model.stage1[1](output)
+    error_calc(output, output_quantized)
     print("=============================")
     input()
+    '''
     print("========== Stage 2 ==========")
     for i in range (0, 4):
-        _, output_quantized = quantize_layer(model.stage2[i], output_quantized, 16)
+        _, output_quantized = quantize_layer(model.stage2[i], output_quantized, q_range_unsigned= 16, q_range_signed= 4, gen_pattern = False)
         output = model.stage2[i](output)
+        error_calc(output, output_quantized)
     print("=============================")
     
     input()
     print("========== Stage 3 ==========")
     for i in range (0, 14):
-        _, output_quantized = quantize_layer(model.stage3[i], output_quantized, 16)
+        _, output_quantized = quantize_layer(model.stage3[i], output_quantized, q_range_unsigned= 16, q_range_signed= 4, gen_pattern = False)
         output = model.stage3[i](output)
+        error_calc(output, output_quantized)
     print("=============================")
 
     input()
     print("========== Stage 4 ==========")
-    _, output_quantized = quantize_layer(model.stage4[0], output_quantized, 16)
+    _, output_quantized = quantize_layer(model.stage4[0], output_quantized, q_range_unsigned= 16, q_range_signed= 2, gen_pattern = False)
     output = model.stage4[0](output)
+    error_calc(output, output_quantized)
     print("=============================")
 
     input()
-    print(output)
-    print(output_quantized)
+    analysis_tensor(output, "x")
+    analysis_tensor(output_quantized, "x")
     input()
     print("========== Average Pooling ==========")
     #_, output_quantized = quantize_layer(model.stage4[0], output_quantized)
     output = model.gap(output)
     output_quantized = model.gap(output_quantized)
+    analysis_tensor(output, "x")
+    analysis_tensor(output_quantized, "x")
     print("=====================================")
     
     print("========== Linear ===================")

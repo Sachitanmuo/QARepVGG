@@ -7,6 +7,9 @@ import cv2
 from PIL import Image
 import matplotlib.pyplot as plt
 import os
+import seaborn as sns
+import numpy as np
+
 def flatten_and_format(state_dict):
     state_dict = state_dict.cpu().detach().numpy().astype(np.int16)
     return ' '.join(map(str, state_dict.flatten().tolist()))
@@ -162,15 +165,15 @@ def quantize_tensor(tensor, lower_bound, upper_bound):
     return quantized_tensor, scaling_factor
 '''
 def quantize_tensor_signed(tensor, q_range):
-    scaling_factor = 2*q_range / 256.
+    scaling_factor = q_range / 128.
     quantized_tensor = tensor / scaling_factor
     quantized_tensor = torch.clamp(quantized_tensor, -128, 127)
     quantized_tensor = torch.round(quantized_tensor)
     return quantized_tensor, scaling_factor
 
 def quantize_tensor_unsigned(tensor, q_range): #[0, 16] -> [0, 255]
-    scaling_factor = q_range / 256
-    quantized_tensor = tensor * (256/q_range)
+    scaling_factor = q_range / 256.
+    quantized_tensor = tensor / scaling_factor
     quantized_tensor = torch.clamp(quantized_tensor, 0, 255)
     quantized_tensor = torch.round(quantized_tensor)
     return quantized_tensor, scaling_factor
@@ -186,7 +189,13 @@ def error_calc(tensor1, tensor2):
 
 def analysis_tensor(tensor, filename):
     data = tensor.cpu().detach().numpy()
-    print(f"Max:{np.max(data)}, Min: {np.min(data)}")
+    #print(f"Max:{np.max(data)}, Min: {np.min(data)}")
+    max_val = np.max(data)
+    min_val = np.min(data)
+    mean_val = np.mean(data)
+    std_val = np.std(data)
+    
+    print(f"Max: {max_val}, Min: {min_val}, Mean: {mean_val}, Std: {std_val}")
     plt.figure(figsize=(8, 6))
     plt.hist(data.flatten(), bins=20, alpha=0.75, color='b')
     plt.xlabel('x')
@@ -200,10 +209,10 @@ def quantize_1st_layer(layer, input):
     weights = layer.rbr_reparam.state_dict()['weight']
     bias = layer.rbr_reparam.state_dict().get('bias', None)
     
-    quantized_weights, s_weight = quantize_tensor_signed(weights, 4)
+    quantized_weights, s_weight = quantize_tensor_signed(weights, 2)
     quantized_bias, s_bias = None, None
     if bias is not None:
-        quantized_bias, s_bias = quantize_tensor_signed(bias, 4)
+        quantized_bias, s_bias = quantize_tensor_signed(bias, 2)
     quantized_input, s_input = quantize_tensor_signed(input, 4)
 
     reconstructed_weights = quantized_weights * s_weight
@@ -220,7 +229,6 @@ def quantize_1st_layer(layer, input):
         quantized_layer.bias.data = quantized_bias
     
     output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input))
-    error_calc(output, output_quantized)
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
     analysis_tensor(output, "unq")
     analysis_tensor(output_quantized, "q")
@@ -233,7 +241,7 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     quantized_weights, s_weight = quantize_tensor_signed(weights, q_range_signed)
     quantized_bias, s_bias = None, None
     if bias is not None:
-        quantized_bias, s_bias = quantize_tensor_signed(bias, 4)
+        quantized_bias, s_bias = quantize_tensor_signed(bias, q_range_signed)
     quantized_input, s_input = quantize_tensor_unsigned(input, q_range_unsigned)
 
     reconstructed_weights = quantized_weights * s_weight
@@ -251,22 +259,91 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     
     output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input))
     o = nn.ReLU()(quantized_layer(quantized_input))
-    error_calc(output, output_quantized)
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
-    analysis_tensor(output, "unq")
-    analysis_tensor(output_quantized, "q")
+    
 
     #=================== generate pattern ====================
-    print(quantized_weights.shape)
-    print(quantized_bias.shape)
-    print(quantized_input.shape)
-    print(o.shape)
-    analysis_tensor(o, "ooooo")
-    analysis_tensor(bias, "ori")
-    analysis_tensor(quantized_bias, "l2qb")
+    #print(quantized_weights.shape)
+    #print(quantized_bias.shape)
+    #print(quantized_input.shape)
+    #print(o.shape)
+    #analysis_tensor(o, "ooooo")
+    #analysis_tensor(bias, "ori")
+    #analysis_tensor(quantized_bias, "l2qb")
     if gen_pattern:
         generate_pattern(quantized_weights, quantized_bias, quantized_input, o)
     #==========================================================
     return output, output_quantized
+
+
+
+
+def summ(model):
+    conv_layers = [module for module in model.modules() if isinstance(module, torch.nn.Conv2d)]
+    weights = [layer.weight.data.cpu().numpy().flatten() for layer in conv_layers]
+
+    sns.set_theme(style="whitegrid")
+    
+
+    plt.figure(figsize=(12, 8))
+    plt.boxplot(weights, vert=False, showfliers=True)
+    plt.xlabel('Weight Values')
+    plt.ylabel('Layer Index')
+    plt.title('Weight Distribution')
+    plt.savefig("./plots/box_plot_v2.png")
+    plt.clf()
+
+    '''
+    plt.figure(figsize=(15, 5 * len(weights))) 
+    for i, w in enumerate(weights):
+        plt.subplot(len(weights), 1, i + 1)
+        plt.hist(w, bins=50, alpha=0.75)
+        plt.title(f'{i + 1}')
+    plt.tight_layout()
+    plt.savefig("./plots/histogram.png")
+    plt.clf()
+
+    
+    plt.figure(figsize=(12, 8 + len(weights)))
+    sns.violinplot(data=weights, orient='h')
+    plt.xlabel('Weight Values')
+    plt.ylabel('Layer Index')
+    plt.title('Weight Distribution of Each Conv Layer (Violin Plot)')
+    plt.savefig("./plots/violin_plot.png")
+    plt.clf()
+
+
+    plt.figure(figsize=(12, 8))
+    for i, w in enumerate(weights):
+        sns.kdeplot(w, label=f'Layer {i + 1}')
+    plt.xlabel('Weight Values')
+    plt.ylabel('Density')
+    plt.title('Weight Density Distribution of Each Conv Layer')
+    plt.legend()
+    plt.savefig("./plots/density_distribution.png")
+    plt.clf()
+    '''
+
+    mean_std = [(np.mean(w), np.std(w)) for w in weights]
+    means = [ms[0] for ms in mean_std]
+    stds = [ms[1] for ms in mean_std]
+    print('---------------------------------------------------')
+    for i in range (len(means)):
+        print(f"Layer {i} -> mean: {means[i]} std: {stds[i]}")
+        print('---------------------------------------------------')
+
+    plt.figure(figsize=(12, 8))
+    x = np.arange(len(weights))
+    plt.bar(x, means, yerr=stds, capsize=5)
+    plt.xlabel('Layer Index')
+    plt.ylabel('Mean Weight Values with Std Dev')
+    plt.title('Mean and Standard Deviation of Weight Values for Each Conv Layer')
+    plt.savefig("./plots/std_dev.png")
+    plt.clf()
+
+
+
+
+    
 
 
