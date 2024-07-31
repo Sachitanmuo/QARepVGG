@@ -25,13 +25,16 @@ def main():
         model.load_state_dict(checkpoint)
     model.eval()
     switch(model)
-    image = cv2.imread("./pattern/image/001.png")
+    image = cv2.imread("data/CIFAR-100_example/bus.png")
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
     image = Image.fromarray(image)   
     image = transform(image)   
     image = image.unsqueeze(0).to(device)
     analysis_tensor(image, "normalized_input")
     model.eval()
+
+    #print(model)
+    #input()
     '''
     with torch.no_grad():
         output = model.stage0(image)
@@ -83,7 +86,6 @@ def main():
         output = output.flatten()
         output = model.linear(output)
         analysis_tensor(output, "linear")
-        
     '''
 
     # =========Test the input quantization error=============
@@ -108,26 +110,60 @@ def main():
     #q2, s2 = quantize_tensor_unsigned(output_quantized)
     #error = torch.sum(torch.mean((output - q2 * s2)**2))
     #print(f"Quantization Error After ReLU: {error}")
-    
+    #input()
     #Stage 1
     print("========== Stage 1 ==========")
-    _, output_quantized = quantize_layer(model.stage1[0], output_quantized)
+    _, output_quantized = quantize_layer(model.stage1[0], output_quantized, q_range_unsigned= 16, q_range_signed= 0.5, gen_pattern = True)
     output = model.stage1[0](output)
-    #_, output_quantized = quantize_layer(model.stage1[1], output_quantized)
-    #output = model.stage1[1](output)
+    '''
+    _, output_quantized = quantize_layer(model.stage1[1], output_quantized, 16)
+    output = model.stage1[1](output)
     print("=============================")
-    '''
-    #Stage 2
-    _, output_quantized = quantize_1st_layer(model.stage2[0], output_quantized)
-    output = model.stage2[0](output)
-    _, output_quantized = quantize_1st_layer(model.stage2[1], output_quantized)
-    output = model.stage2[1](output)
-    _, output_quantized = quantize_1st_layer(model.stage2[2], output_quantized)
-    output = model.stage2[2](output)
-    _, output_quantized = quantize_1st_layer(model.stage2[3], output_quantized)
-    output = model.stage2[3](output)
+    input()
+    print("========== Stage 2 ==========")
+    for i in range (0, 4):
+        _, output_quantized = quantize_layer(model.stage2[i], output_quantized, 16)
+        output = model.stage2[i](output)
+    print("=============================")
+    
+    input()
+    print("========== Stage 3 ==========")
+    for i in range (0, 14):
+        _, output_quantized = quantize_layer(model.stage3[i], output_quantized, 16)
+        output = model.stage3[i](output)
+    print("=============================")
+
+    input()
+    print("========== Stage 4 ==========")
+    _, output_quantized = quantize_layer(model.stage4[0], output_quantized, 16)
+    output = model.stage4[0](output)
+    print("=============================")
+
+    input()
+    print(output)
+    print(output_quantized)
+    input()
+    print("========== Average Pooling ==========")
+    #_, output_quantized = quantize_layer(model.stage4[0], output_quantized)
+    output = model.gap(output)
+    output_quantized = model.gap(output_quantized)
+    print("=====================================")
+    
+    print("========== Linear ===================")
+    #_, output_quantized = quantize_layer(model.stage4[0], output_quantized)
+    output = torch.flatten(output, 1) 
+    output_quantized = torch.flatten(output_quantized, 1) 
+    output = model.linear(output)
+    output_quantized = model.linear(output_quantized)
     error_calc(output, output_quantized)
+    print("=====================================")
+
+    print("========== Process Output ==========")
+    output = torch.topk(output, 5)
+    output_quantized = torch.topk(output_quantized, 5)
+    print(f"original class:{output}, quantized_class:{output_quantized}")
     '''
+
 
 
 
