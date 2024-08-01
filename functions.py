@@ -165,13 +165,16 @@ def quantize_tensor(tensor, lower_bound, upper_bound):
     return quantized_tensor, scaling_factor
 '''
 def quantize_tensor_signed(tensor, q_range):
-    scaling_factor = q_range / 128.
-    quantized_tensor = tensor / scaling_factor
+    max_ = torch.max(abs(tensor))
+    print(f"The Boundary : {max_}!!!!!")
+    scaling_factor = 128. / q_range
+    quantized_tensor = tensor * scaling_factor
     quantized_tensor = torch.clamp(quantized_tensor, -128, 127)
     quantized_tensor = torch.round(quantized_tensor)
-    return quantized_tensor, scaling_factor
+    return quantized_tensor, 1. / scaling_factor
 
 def quantize_tensor_unsigned(tensor, q_range): #[0, 16] -> [0, 255]
+    max_ = torch.max(tensor)
     scaling_factor = q_range / 256.
     quantized_tensor = tensor / scaling_factor
     quantized_tensor = torch.clamp(quantized_tensor, 0, 255)
@@ -209,11 +212,11 @@ def quantize_1st_layer(layer, input):
     weights = layer.rbr_reparam.state_dict()['weight']
     bias = layer.rbr_reparam.state_dict().get('bias', None)
     
-    quantized_weights, s_weight = quantize_tensor_signed(weights, 2)
+    quantized_weights, s_weight = quantize_tensor_signed(weights, 4)
     quantized_bias, s_bias = None, None
     if bias is not None:
         quantized_bias, s_bias = quantize_tensor_signed(bias, 2)
-    quantized_input, s_input = quantize_tensor_signed(input, 4)
+    quantized_input, s_input = quantize_tensor_signed(input, 2)
 
     reconstructed_weights = quantized_weights * s_weight
     if quantized_bias is not None:
@@ -223,15 +226,14 @@ def quantize_1st_layer(layer, input):
     output = nn.ReLU()(layer.rbr_reparam(input))
     
     quantized_layer = nn.Conv2d(layer.rbr_reparam.in_channels, layer.rbr_reparam.out_channels, layer.rbr_reparam.kernel_size, 
-                                stride=layer.rbr_reparam.stride, padding=layer.rbr_reparam.padding, bias=(reconstructed_bias is not None))
+                                stride=layer.rbr_reparam.stride, padding=layer.rbr_reparam.padding, bias=None)
     quantized_layer.weight.data = quantized_weights
-    if reconstructed_bias is not None:
-        quantized_layer.bias.data = quantized_bias
-    
-    output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input))
+    #if reconstructed_bias is not None:
+    #    quantized_layer.bias.data = quantized_bias
+    print(quantized_layer(quantized_input).shape)
+    print(bias.shape)
+    output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
-    analysis_tensor(output, "unq")
-    analysis_tensor(output_quantized, "q")
     return output, output_quantized
 
 def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern = False):
@@ -241,7 +243,7 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     quantized_weights, s_weight = quantize_tensor_signed(weights, q_range_signed)
     quantized_bias, s_bias = None, None
     if bias is not None:
-        quantized_bias, s_bias = quantize_tensor_signed(bias, q_range_signed)
+        quantized_bias, s_bias = quantize_tensor_signed(bias, 4)
     quantized_input, s_input = quantize_tensor_unsigned(input, q_range_unsigned)
 
     reconstructed_weights = quantized_weights * s_weight
@@ -252,15 +254,17 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     output = nn.ReLU()(layer.rbr_reparam(input))
     
     quantized_layer = nn.Conv2d(layer.rbr_reparam.in_channels, layer.rbr_reparam.out_channels, layer.rbr_reparam.kernel_size, 
-                                stride=layer.rbr_reparam.stride, padding=layer.rbr_reparam.padding, bias=(reconstructed_bias is not None))
+                                stride=layer.rbr_reparam.stride, padding=layer.rbr_reparam.padding, bias= None)
     quantized_layer.weight.data = quantized_weights
-    if reconstructed_bias is not None:
-        quantized_layer.bias.data = quantized_bias
+    #if reconstructed_bias is not None:
+    #    quantized_layer.bias.data = quantized_bias
     
-    output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input))
+    output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
     o = nn.ReLU()(quantized_layer(quantized_input))
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
-    
+    print("comparison between unq and q: ")
+    analysis_tensor(weights, "unq")
+    analysis_tensor(quantized_weights, "q")
 
     #=================== generate pattern ====================
     #print(quantized_weights.shape)
@@ -274,6 +278,32 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
         generate_pattern(quantized_weights, quantized_bias, quantized_input, o)
     #==========================================================
     return output, output_quantized
+
+def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=False):
+    weights = layer.state_dict()['weight']
+    bias = layer.state_dict()['bias']
+
+    quantized_weights, s_weight = quantize_tensor_signed(weights, q_range_signed)
+    quantized_bias, s_bias = quantize_tensor_signed(bias, 4)
+    quantized_input, s_input = quantize_tensor_unsigned(input, q_range_unsigned)
+
+    reconstructed_weights = quantized_weights * s_weight
+    #reconstructed_bias = quantized_bias * s_bias
+
+    quantized_layer = nn.Linear(layer.in_features, layer.out_features, bias=False)
+    quantized_layer.weight.data = quantized_weights
+
+    output = (layer(input))
+    output_quantized = (s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1))
+    print("comparison between unq and q: ")
+    analysis_tensor(weights, "unq_linear")
+    analysis_tensor(quantized_weights, "q_linear")
+
+    if gen_pattern:
+        generate_pattern(quantized_weights, quantized_bias, quantized_input, output_quantized)
+
+    return output, output_quantized
+
 
 
 
