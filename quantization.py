@@ -33,7 +33,7 @@ def main():
             image = cv2.imread(os.path.join(folder_path, filename))
             if image is not None:
                 images.append(image)
-    image = images[4]
+    image = images[11]
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
     image = Image.fromarray(image)   
     image = transform(image)   
@@ -176,7 +176,7 @@ def main():
     output_quantized = torch.flatten(output_quantized, 1) 
     output = model.linear(output)
     #output_quantized = model.linear(output_quantized)
-    _, output_quantized = quantize_linear(model.linear, output_quantized, q_range_unsigned=4, q_range_signed=2)
+    _, output_quantized = quantize_linear(model.linear, output_quantized, q_range_unsigned=4, q_range_signed=1)
     error_calc(output, output_quantized)
     print("=====================================")
 

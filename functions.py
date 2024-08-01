@@ -298,6 +298,8 @@ def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=
     print("comparison between unq and q: ")
     analysis_tensor(weights, "unq_linear")
     analysis_tensor(quantized_weights, "q_linear")
+    print("input of linear layer: ")
+    analysis_tensor(input, "input_before_linear")
 
     if gen_pattern:
         generate_pattern(quantized_weights, quantized_bias, quantized_input, output_quantized)
