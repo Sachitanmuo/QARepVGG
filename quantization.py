@@ -33,7 +33,7 @@ def main():
             image = cv2.imread(os.path.join(folder_path, filename))
             if image is not None:
                 images.append(image)
-    image = images[11]
+    image = images[1]
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
     image = Image.fromarray(image)   
     image = transform(image)   
@@ -45,7 +45,9 @@ def main():
     #input()
 
     #summ(model)
-    
+    #print(quantized_model(model, image).shape)
+    #print(model(image).shape)
+
     with torch.no_grad():
         output = model.stage0(image)
         analysis_tensor(output, "stage0_output")
@@ -112,8 +114,8 @@ def main():
     #==============================================================
     print("========== Stage 0 ==========")
     output, output_quantized = quantize_1st_layer(model.stage0, image)
-    error_calc(output, output_quantized)
-    input()
+    #error_calc(output, output_quantized)
+    #input()
     print("=============================")
     # =========Test the quantization error after ReLU =============
     #      MSE After ReLU: 0.001088797813281417 (use original input)

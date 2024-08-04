@@ -108,44 +108,44 @@ def generate_pattern(weight, bias, input, output):
     input_split = []
     for i in range (3):
         input_split.append(input[:, i: 16*(i+1), :, :])
-    h0_w0 = input_split[0][:, :, 0::2, 0::2]
-    h0_w1 = input_split[0][:, :, 0::2, 1::2]
-    h1_w0 = input_split[0][:, :, 1::2, 0::2]
-    h1_w1 = input_split[0][:, :, 1::2, 1::2]
+    h0_w0 = input_split[0][:, :, :, 0::2]
+    h0_w1 = input_split[0][:, :, :, 1::2]
+    h1_w0 = input_split[0][:, :, 0::2, :]
+    h1_w1 = input_split[0][:, :, 1::2, :]
     def repeat(tensor, file):
         with open(file, 'w') as f:
-            for i in range (56):
-                for j in range (56):
+            for i in range (tensor.shape[2]):
+                for j in range (tensor.shape[3]):
                     flatten_input = tensor[:, :, i, j].flatten().astype(np.uint8).tolist()
                     formatted_input = []
                     for x in flatten_input:
                         formatted_input.append(format(np.uint8(x), '09b'))
                     data = ' '.join(map(str, formatted_input))
                     f.write(data + '\n')
-    repeat(h0_w0, "./pattern/layer2/input_cgroup0h%0w%0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup0h%0w%1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup0h%1w%0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup0h%1w%1.txt")
+    repeat(h0_w0, "./pattern/layer2/input_cgroup0w%0.txt")
+    repeat(h0_w1, "./pattern/layer2/input_cgroup0w%1.txt")
+    repeat(h1_w0, "./pattern/layer2/input_cgroup0h%0.txt")
+    repeat(h1_w1, "./pattern/layer2/input_cgroup0h%1.txt")
     
-    h0_w0 = input_split[1][:, :, 0::2, 0::2]
-    h0_w1 = input_split[1][:, :, 0::2, 1::2]
-    h1_w0 = input_split[1][:, :, 1::2, 0::2]
-    h1_w1 = input_split[1][:, :, 1::2, 1::2]
+    h0_w0 = input_split[1][:, :, :, 0::2]
+    h0_w1 = input_split[1][:, :, :, 1::2]
+    h1_w0 = input_split[1][:, :, 0::2, :]
+    h1_w1 = input_split[1][:, :, 1::2, :]
 
-    repeat(h0_w0, "./pattern/layer2/input_cgroup1h%0w%0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup1h%0w%1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup1h%1w%0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup1h%1w%1.txt")
+    repeat(h0_w0, "./pattern/layer2/input_cgroup1w%0.txt")
+    repeat(h0_w1, "./pattern/layer2/input_cgroup1w%1.txt")
+    repeat(h1_w0, "./pattern/layer2/input_cgroup1h%0.txt")
+    repeat(h1_w1, "./pattern/layer2/input_cgroup1h%1.txt")
 
-    h0_w0 = input_split[2][:, :, 0::2, 0::2]
-    h0_w1 = input_split[2][:, :, 0::2, 1::2]
-    h1_w0 = input_split[2][:, :, 1::2, 0::2]
-    h1_w1 = input_split[2][:, :, 1::2, 1::2]
+    h0_w0 = input_split[2][:, :, :, 0::2]
+    h0_w1 = input_split[2][:, :, :, 1::2]
+    h1_w0 = input_split[2][:, :, 0::2, :]
+    h1_w1 = input_split[2][:, :, 1::2, :]
 
-    repeat(h0_w0, "./pattern/layer2/input_cgroup2h%0w%0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup2h%0w%1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup2h%1w%0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup2h%1w%1.txt")
+    repeat(h0_w0, "./pattern/layer2/input_cgroup2w%0.txt")
+    repeat(h0_w1, "./pattern/layer2/input_cgroup2w%1.txt")
+    repeat(h1_w0, "./pattern/layer2/input_cgroup2h%0.txt")
+    repeat(h1_w1, "./pattern/layer2/input_cgroup2h%1.txt")
 
     
 
@@ -166,7 +166,7 @@ def quantize_tensor(tensor, lower_bound, upper_bound):
 '''
 def quantize_tensor_signed(tensor, q_range):
     max_ = torch.max(abs(tensor))
-    print(f"The Boundary : {max_}!!!!!")
+    #print(f"The Boundary : {max_}!!!!!")
     scaling_factor = 128. / q_range
     quantized_tensor = tensor * scaling_factor
     quantized_tensor = torch.clamp(quantized_tensor, -128, 127)
@@ -184,8 +184,8 @@ def quantize_tensor_unsigned(tensor, q_range): #[0, 16] -> [0, 255]
 def error_calc(tensor1, tensor2):
     mse_error = torch.mean((tensor1 - tensor2) ** 2)
     abs_error = torch.mean(torch.abs(tensor1 - tensor2))
-    print(f"Quantization MSE: {mse_error.item()}")
-    print(f"Quantization Absolute Error: {abs_error.item()}")
+    #print(f"Quantization MSE: {mse_error.item()}")
+    #print(f"Quantization Absolute Error: {abs_error.item()}")
     analysis_tensor(tensor1, "before_quantize")
     analysis_tensor(tensor2, "after_quantize")
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
@@ -198,7 +198,7 @@ def analysis_tensor(tensor, filename):
     mean_val = np.mean(data)
     std_val = np.std(data)
     
-    print(f"Max: {max_val}, Min: {min_val}, Mean: {mean_val}, Std: {std_val}")
+    #print(f"Max: {max_val}, Min: {min_val}, Mean: {mean_val}, Std: {std_val}")
     plt.figure(figsize=(8, 6))
     plt.hist(data.flatten(), bins=20, alpha=0.75, color='b')
     plt.xlabel('x')
@@ -230,8 +230,8 @@ def quantize_1st_layer(layer, input):
     quantized_layer.weight.data = quantized_weights
     #if reconstructed_bias is not None:
     #    quantized_layer.bias.data = quantized_bias
-    print(quantized_layer(quantized_input).shape)
-    print(bias.shape)
+    #print(quantized_layer(quantized_input).shape)
+    #print(bias.shape)
     output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
     return output, output_quantized
@@ -252,7 +252,7 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     else:
         reconstructed_bias = None
     output = nn.ReLU()(layer.rbr_reparam(input))
-    
+    #output = None
     quantized_layer = nn.Conv2d(layer.rbr_reparam.in_channels, layer.rbr_reparam.out_channels, layer.rbr_reparam.kernel_size, 
                                 stride=layer.rbr_reparam.stride, padding=layer.rbr_reparam.padding, bias= None)
     quantized_layer.weight.data = quantized_weights
@@ -262,9 +262,9 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
     o = nn.ReLU()(quantized_layer(quantized_input))
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
-    print("comparison between unq and q: ")
-    analysis_tensor(weights, "unq")
-    analysis_tensor(quantized_weights, "q")
+    #print("comparison between unq and q: ")
+    #analysis_tensor(weights, "unq")
+    #analysis_tensor(quantized_weights, "q")
 
     #=================== generate pattern ====================
     #print(quantized_weights.shape)
@@ -294,12 +294,13 @@ def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=
     quantized_layer.weight.data = quantized_weights
 
     output = (layer(input))
+    #output = None
     output_quantized = (s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1))
-    print("comparison between unq and q: ")
-    analysis_tensor(weights, "unq_linear")
-    analysis_tensor(quantized_weights, "q_linear")
-    print("input of linear layer: ")
-    analysis_tensor(input, "input_before_linear")
+    #print("comparison between unq and q: ")
+    #analysis_tensor(weights, "unq_linear")
+    #analysis_tensor(quantized_weights, "q_linear")
+    #print("input of linear layer: ")
+    #analysis_tensor(input, "input_before_linear")
 
     if gen_pattern:
         generate_pattern(quantized_weights, quantized_bias, quantized_input, output_quantized)
@@ -372,6 +373,71 @@ def summ(model):
     plt.title('Mean and Standard Deviation of Weight Values for Each Conv Layer')
     plt.savefig("./plots/std_dev.png")
     plt.clf()
+
+
+# This Function is used to verify the accuracy
+
+def quantized_model(model, image):
+    #========== Stage 0 ==========
+    output, output_quantized = quantize_1st_layer(model.stage0, image)
+    #error_calc(output, output_quantized)
+    #=============================
+
+    #========== Stage 1 =========="
+    _, output_quantized = quantize_layer(model.stage1[0], output_quantized, q_range_unsigned= 16, q_range_signed= 1, gen_pattern = True)
+    #output = model.stage1[0](output)
+    #error_calc(output, output_quantized)
+
+    _, output_quantized = quantize_layer(model.stage1[1], output_quantized, q_range_unsigned= 8, q_range_signed= 4, gen_pattern = False)
+    #output = model.stage1[1](output)
+    #error_calc(output, output_quantized)
+    #============================="
+
+    #========== Stage 2 =========="
+    q_list = [0.5, 2, 2, 2]
+    for i in range (0, 4):
+        _, output_quantized = quantize_layer(model.stage2[i], output_quantized, q_range_unsigned= 8, q_range_signed= q_list[i], gen_pattern = False)
+        #output = model.stage2[i](output)
+        #error_calc(output, output_quantized)
+    #=============================
+
+    #========== Stage 3 ==========
+    for i in range (0, 14):
+        _, output_quantized = quantize_layer(model.stage3[i], output_quantized, q_range_unsigned= 8, q_range_signed= 1, gen_pattern = False)
+        #output = model.stage3[i](output)
+        #error_calc(output, output_quantized)
+    #=============================
+
+    #========== Stage 4 ==========
+    _, output_quantized = quantize_layer(model.stage4[0], output_quantized, q_range_unsigned= 8, q_range_signed= 1, gen_pattern = False)
+    #output = model.stage4[0](output)
+    #error_calc(output, output_quantized)
+    #=============================
+
+    #analysis_tensor(output, "x")
+    #analysis_tensor(output_quantized, "x")
+    #========== Average Pooling ==========
+    #_, output_quantized = quantize_layer(model.stage4[0], output_quantized)
+    #output = model.gap(output)
+    output_quantized = model.gap(output_quantized)
+    #analysis_tensor(output, "x")
+    #analysis_tensor(output_quantized, "x")
+    #================================
+    
+    #========== Linear ===================
+    #output = torch.flatten(output, 1) 
+    output_quantized = torch.flatten(output_quantized, 1) 
+    #output = model.linear(output)
+    _, output_quantized = quantize_linear(model.linear, output_quantized, q_range_unsigned=4, q_range_signed=1)
+    #error_calc(output, output_quantized)
+    #=====================================
+
+    #========== Process Output ==========
+    #output = torch.topk(output, 5)
+    #output_quantized = torch.topk(output_quantized, 5)
+    #print(f"original class:{output}, quantized_class:{output_quantized}")
+    return  output_quantized
+
 
 
 

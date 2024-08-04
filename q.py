@@ -10,19 +10,20 @@ from pytorch_quantization import nn as quant_nn
 from pytorch_quantization import quant_modules
 from pytorch_quantization.tensor_quant import QuantDescriptor
 from pytorch_quantization.nn.modules.tensor_quantizer import TensorQuantizer
+from functions import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = "cpu"
 data_path = './data/'
-
+print(device)
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
-    #transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
+    transforms.Normalize(mean=[0.5071, 0.4867, 0.4408], std=[0.2675, 0.2565, 0.2761])
 ])
 
 test_dataset = datasets.CIFAR100(root=data_path, train=False, download=True, transform=transform)
-test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4)
 
 def accuracy(output, target, topk=(1, 5)):
     maxk = max(topk)
@@ -38,20 +39,48 @@ def accuracy(output, target, topk=(1, 5)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader, device, max_images=100):
     top1_acc = 0
     top5_acc = 0
     total = 0
+    num_images = 0
 
     model.eval()
     with torch.no_grad():
         for images, labels in data_loader:
+            if num_images >= max_images:
+                break
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             top1, top5 = accuracy(outputs, labels, topk=(1, 5))
             top1_acc += top1.item() * images.size(0)
             top5_acc += top5.item() * images.size(0)
             total += images.size(0)
+            num_images += images.size(0)
+
+    top1_acc /= total
+    top5_acc /= total
+
+    return top1_acc, top5_acc
+
+def evaluate_quantization(model, data_loader, device, max_images=100):
+    top1_acc = 0
+    top5_acc = 0
+    total = 0
+    num_images = 0
+
+    model.eval()
+    with torch.no_grad():
+        for images, labels in data_loader:
+            if num_images >= max_images:
+                break
+            images, labels = images.to(device), labels.to(device)
+            outputs = quantized_model(model, images)
+            top1, top5 = accuracy(outputs, labels, topk=(1, 5))
+            top1_acc += top1.item() * images.size(0)
+            top5_acc += top5.item() * images.size(0)
+            total += images.size(0)
+            num_images += images.size(0)
 
     top1_acc /= total
     top5_acc /= total
@@ -107,7 +136,7 @@ def main():
         model.load_state_dict(checkpoint)
     model.eval()
     switch(model)
-    print(model)
+    #print(model)
     #quantized_model = QuantizedRepVGG(model)
 
     start_time = time.time()
@@ -116,7 +145,13 @@ def main():
     exe_time = end_time - start_time
     print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%, inference time = {exe_time} sec')
 
+    start_time = time.time()
+    top1_acc, top5_acc = evaluate_quantization(model, test_loader, device)
+    end_time = time.time()
+    exe_time = end_time - start_time
+    print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%, inference time = {exe_time} sec')
 
+    '''
     quant_modules.initialize()
     #quant_desc_input = QuantDescriptor(num_bits=8, fake_quant=False, calib_method="histogram")
     #quant_nn.QuantConv2d.set_default_quant_desc_input(quant_desc_input)
@@ -175,6 +210,6 @@ def main():
     end_time = time.time()
     exe_time = end_time - start_time
     print(f'Quantized Model - Top-1 Accuracy: {top1_acc_quant:.2f}%, Top-5 Accuracy: {top5_acc_quant:.2f}%, inference time: {exe_time} sec')
-
+    '''
 if __name__ == "__main__":
     main()
