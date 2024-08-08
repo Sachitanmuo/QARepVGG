@@ -188,10 +188,5 @@ def main():
     print(f"original class:{output}, quantized_class:{output_quantized}")
     
 
-
-
-
-    
-
 if __name__ == "__main__":
     main()

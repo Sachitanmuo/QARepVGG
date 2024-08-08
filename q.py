@@ -11,6 +11,7 @@ from pytorch_quantization import quant_modules
 from pytorch_quantization.tensor_quant import QuantDescriptor
 from pytorch_quantization.nn.modules.tensor_quantizer import TensorQuantizer
 from functions import *
+from quantized_repvgg import QuantizedRepVGG
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #device = "cpu"
@@ -39,11 +40,16 @@ def accuracy(output, target, topk=(1, 5)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-def evaluate(model, data_loader, device, max_images=100):
+def evaluate(model, q_model, data_loader, device, max_images=100000):
     top1_acc = 0
     top5_acc = 0
     total = 0
     num_images = 0
+
+    top1_acc_ = 0
+    top5_acc_ = 0
+    total_ = 0
+    num_images_ = 0
 
     model.eval()
     with torch.no_grad():
@@ -52,16 +58,31 @@ def evaluate(model, data_loader, device, max_images=100):
                 break
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
+            quantized_outputs = quantized_model_(model, images)
+            #quantized_outputs = q_model(images)
             top1, top5 = accuracy(outputs, labels, topk=(1, 5))
+            top1_, top5_ = accuracy(quantized_outputs, labels, topk=(1, 5))
+            error_calc(outputs, quantized_outputs)
+            to = torch.topk(outputs, 5)
+            toq = torch.topk(quantized_outputs, 5)
+            print(f"original class:{to}, quantized_class:{toq}")
+
+
             top1_acc += top1.item() * images.size(0)
             top5_acc += top5.item() * images.size(0)
+            top1_acc_ += top1_.item() * images.size(0)
+            top5_acc_ += top5_.item() * images.size(0)
             total += images.size(0)
+            total_ += images.size(0)
             num_images += images.size(0)
+            num_images_ += images.size(0)
 
     top1_acc /= total
     top5_acc /= total
 
-    return top1_acc, top5_acc
+    top1_acc_ /= total_
+    top5_acc_ /= total_
+    return top1_acc, top5_acc, top1_acc_, top5_acc_
 
 def evaluate_quantization(model, data_loader, device, max_images=100):
     top1_acc = 0
@@ -69,13 +90,14 @@ def evaluate_quantization(model, data_loader, device, max_images=100):
     total = 0
     num_images = 0
 
+
     model.eval()
     with torch.no_grad():
         for images, labels in data_loader:
             if num_images >= max_images:
                 break
             images, labels = images.to(device), labels.to(device)
-            outputs = quantized_model(model, images)
+            outputs = quantized_model_(model, images)
             top1, top5 = accuracy(outputs, labels, topk=(1, 5))
             top1_acc += top1.item() * images.size(0)
             top5_acc += top5.item() * images.size(0)
@@ -111,21 +133,6 @@ def switch(model):
     model.stage3[13].switch_to_deploy()
     model.stage4[0].switch_to_deploy()
 
-class QuantizedRepVGG(nn.Module):
-    def __init__(self, model):
-        super(QuantizedRepVGG, self).__init__()
-        #self.quant = quant_nn.TensorQuantizer(QuantDescriptor(QUANT_DESC_8BIT_CONV2D_WEIGHT_PER_CHANNEL))
-        #self.input_quantizer = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, calib_method="histogram"))
-        #self.weight_quantizer = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, calib_method="histogram"))
-        #self.quant = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, fake_quant=False, calib_method='histogram'))
-        self.model = model
-        #self.dequant = quant_nn.TensorQuantizer(QuantDescriptor(num_bits=8, fake_quant=False, calib_method='histogram'))
-
-    def forward(self, x):
-        #x = self.quant(x)
-        x = self.model(x)
-        #x = self.dequant(x)
-        return x
 
 def main():
     model = create_QARepVGGBlockV2_A0(deploy=False).to(device)
@@ -139,18 +146,32 @@ def main():
     #print(model)
     #quantized_model = QuantizedRepVGG(model)
 
-    start_time = time.time()
-    top1_acc, top5_acc = evaluate(model, test_loader, device)
-    end_time = time.time()
-    exe_time = end_time - start_time
-    print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%, inference time = {exe_time} sec')
+    #===========Quantized Model Initialize=====================
+    # Example usage:
+    # Instantiate the original model and the quantized model
+    q_ranges = {
+        'stage1': [1, 4],
+        'stage2': [1, 1, 1, 1],
+        'stage3': [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        'stage4': [2],
+        'linear': 1
+    }
 
+    q_model = QuantizedRepVGG(model)
+
+    start_time = time.time()
+    top1_acc, top5_acc, top1_acc_, top5_acc_ = evaluate(model, q_model, test_loader, device)
+    end_time = time.time()
+    #exe_time = end_time - start_time
+    print(f'Original  Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%')
+    print(f'Quantized Model - Top-1 Accuracy: {top1_acc_:.2f}%, Top-5 Accuracy: {top5_acc_:.2f}%')
+    '''
     start_time = time.time()
     top1_acc, top5_acc = evaluate_quantization(model, test_loader, device)
     end_time = time.time()
     exe_time = end_time - start_time
     print(f'Original Model - Top-1 Accuracy: {top1_acc:.2f}%, Top-5 Accuracy: {top5_acc:.2f}%, inference time = {exe_time} sec')
-
+    '''
     '''
     quant_modules.initialize()
     #quant_desc_input = QuantDescriptor(num_bits=8, fake_quant=False, calib_method="histogram")
