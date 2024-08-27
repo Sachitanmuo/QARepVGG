@@ -104,7 +104,7 @@ def generate_pattern(weight, bias, input, output, shift_amt):
             
     with open("./pattern/layer2/bias.txt", 'w') as f:
         flatten_bias = bias.flatten().astype(np.int16).tolist()
-        data = ' '.join(map(str, flatten_bias))
+        data = '\n'.join(map(str, flatten_bias))
         f.write(data + '\n')
     
     with open("./pattern/layer2/bias_b.txt", 'w') as f:
@@ -114,8 +114,8 @@ def generate_pattern(weight, bias, input, output, shift_amt):
             if x >= 0:
                 formatted_bias.append('0' + format(np.int16(x), '015b'))
             else:
-                formatted_bias.append('1' + format(np.int16(x + 128), '015b'))
-        data = ''.join(map(str, formatted_bias))
+                formatted_bias.append('1' + format(np.int16(x + pow(2, 15)), '015b'))
+        data = '\n'.join(map(str, formatted_bias))
         f.write(data + '\n')
 
     with open("./pattern/layer2/output.txt", 'w') as f:
@@ -140,7 +140,7 @@ def generate_pattern(weight, bias, input, output, shift_amt):
     #Seperate the channel into 3 parts
     input_split = []
     for i in range (3):
-        input_split.append(input[:, i: 16*(i+1), :, :])
+        input_split.append(input[:, 16*i: 16*(i+1), :, :])
     h0_w0 = input_split[0][:, :, 0::2, 0::2]
     h0_w1 = input_split[0][:, :, 0::2, 1::2]
     h1_w0 = input_split[0][:, :, 1::2, 0::2]
@@ -154,33 +154,33 @@ def generate_pattern(weight, bias, input, output, shift_amt):
                     flatten_input = tensor[:, :, i, j].flatten().astype(np.uint8).tolist()
                     formatted_input = []
                     for x in flatten_input:
-                        formatted_input.append(format(np.uint8(x), '09b'))
+                        #formatted_input.append(format(np.uint8(x), '08b'))
+                        formatted_input.append(x)
                     data = ' '.join(map(str, formatted_input))
                     f.write(data + '\n')
-    repeat(h0_w0, "./pattern/layer2/input_cgroup0h%0w%0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup0h%0w%1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup0h%1w%0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup0h%1w%1.txt")
+    repeat(h0_w0, "./pattern/layer2/input_cgroup0h_0w_0.txt")
+    repeat(h0_w1, "./pattern/layer2/input_cgroup0h_0w_1.txt")
+    repeat(h1_w0, "./pattern/layer2/input_cgroup0h_1w_0.txt")
+    repeat(h1_w1, "./pattern/layer2/input_cgroup0h_1w_1.txt")
     
     h0_w0 = input_split[1][:, :, 0::2, 0::2]
     h0_w1 = input_split[1][:, :, 0::2, 1::2]
     h1_w0 = input_split[1][:, :, 1::2, 0::2]
     h1_w1 = input_split[1][:, :, 1::2, 1::2]
-
-    repeat(h0_w0, "./pattern/layer2/input_cgroup1h%0w%0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup1h%0w%1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup1h%1w%0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup1h%1w%1.txt")
+    repeat(h0_w0, "./pattern/layer2/input_cgroup1h_0w_0.txt")
+    repeat(h0_w1, "./pattern/layer2/input_cgroup1h_0w_1.txt")
+    repeat(h1_w0, "./pattern/layer2/input_cgroup1h_1w_0.txt")
+    repeat(h1_w1, "./pattern/layer2/input_cgroup1h_1w_1.txt")
 
     h0_w0 = input_split[2][:, :, 0::2, 0::2]
     h0_w1 = input_split[2][:, :, 0::2, 1::2]
     h1_w0 = input_split[2][:, :, 1::2, 0::2]
     h1_w1 = input_split[2][:, :, 1::2, 1::2]
 
-    repeat(h0_w0, "./pattern/layer2/input_cgroup2h%0w%0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup2h%0w%1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup2h%1w%0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup2h%1w%1.txt")
+    repeat(h0_w0, "./pattern/layer2/input_cgroup2h_0w_0.txt")
+    repeat(h0_w1, "./pattern/layer2/input_cgroup2h_0w_1.txt")
+    repeat(h1_w0, "./pattern/layer2/input_cgroup2h_1w_0.txt")
+    repeat(h1_w1, "./pattern/layer2/input_cgroup2h_1w_1.txt")
 
     
 

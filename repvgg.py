@@ -1604,7 +1604,10 @@ def create_GRERepVGG_D2se(deploy=False):
     return RepVGG(num_blocks=[8, 14, 24, 1], num_classes=1000,
                   width_multiplier=[2.5, 2.5, 2.5, 5], override_groups_map=None, deploy=deploy, use_se=True, block_cls=GRERepVGGBlock)
 
-
+def create_GTSRB(deploy=False):
+    return RepVGG(num_blocks=[2, 4, 4, 1], num_classes=43, 
+                  width_multiplier=[0.75, 0.75, 0.75, 2.5], override_groups_map=None, deploy=deploy, block_cls=QARepVGGBlockV2)
+#                                  [64  ,  128,  256, 512]
 func_dict = {
 'RepVGG-A0': create_RepVGG_A0,
 'RepVGG-A0-DW': create_RepVGG_A0_DW,
