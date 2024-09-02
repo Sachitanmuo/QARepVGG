@@ -182,7 +182,8 @@ def generate_pattern(weight, bias, input, output, shift_amt):
     repeat(h1_w0, "./pattern/layer2/input_cgroup2h_1w_0.txt")
     repeat(h1_w1, "./pattern/layer2/input_cgroup2h_1w_1.txt")
 
-    
+def save_tensor_as_txt(tensor, filename):
+    np.savetxt(filename, tensor.cpu().detach().numpy().flatten(), fmt='%d')   
 
 
 
@@ -295,22 +296,15 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     
     output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
     o = nn.ReLU()(quantized_layer(quantized_input))
-    #o = nn.ReLU()(quantized_layer(quantized_input) + torch.round(bias.view(1, -1, 1, 1) * pow(2, 11)))
-    #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
-    #print("comparison between unq and q: ")
-    #analysis_tensor(weights, "unq")
-    #analysis_tensor(quantized_weights, "q")
-
-    #=================== generate pattern ====================
-    #print(quantized_weights.shape)
-    #print(quantized_bias.shape)
-    #print(quantized_input.shape)
-    #print(o.shape)
-    #analysis_tensor(o, "ooooo")
-    #analysis_tensor(bias, "ori")
-    #analysis_tensor(quantized_bias, "l2qb")
     if gen_pattern:
         generate_pattern(quantized_weights, bias, quantized_input, o, 11)
+        save_tensor_as_txt(quantized_input, './pattern/algorithm/quantized_input.txt')
+        if quantized_bias is not None:
+            save_tensor_as_txt(quantized_bias, './pattern/algorithm/quantized_bias.txt')
+        save_tensor_as_txt(quantized_weights, './pattern/algorithm/quantized_weights.txt')
+        print(quantized_input.shape)
+        print(quantized_weights.shape)
+        print(quantized_bias.shape)
     #==========================================================
     return output, output_quantized
 
@@ -341,6 +335,7 @@ def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=
 
     if gen_pattern:
         generate_pattern(quantized_weights, quantized_bias, quantized_input, o)
+        #deal with output per 16 channels to generate the testcase
 
     return output, output_quantized
 

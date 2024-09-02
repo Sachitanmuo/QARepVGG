@@ -99,6 +99,7 @@ def plot_confusion_matrix(cm, classes, title='Confusion Matrix'):
     plt.ylabel('True Label')
     plt.title(title)
     plt.show()
+    plt.clf()
 
 # Training loop
 model.eval()
