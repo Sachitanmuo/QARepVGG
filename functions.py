@@ -43,7 +43,9 @@ def generate_pattern(weight, bias, input, output, shift_amt):
     #analysis_tensor(weight, "l2qw")
     bias = bias * pow(2, shift_amt)
     bias = torch.round(bias)
-    
+    save_tensor_as_txt(input, "./pattern/layer2/I.txt")
+
+
     weight = weight.cpu().detach().numpy()
     bias   =   bias.cpu().detach().numpy()
     input  =  input.cpu().detach().numpy()
@@ -52,10 +54,12 @@ def generate_pattern(weight, bias, input, output, shift_amt):
     weight_0 = weight[0::2, :, :, :]
     weight_1 = weight[1::2, :, :, :]
 
+
     out_channels, in_channels, kernel_h, kernel_w = weight.shape
     in_size = input.shape[2]
     out_size = output.shape[2]
     print(weight_0.shape)
+
     with open("./pattern/layer2/weight.txt", 'w') as f:
         for i in range (out_channels):
             for j in range(in_channels):
@@ -185,6 +189,65 @@ def generate_pattern(weight, bias, input, output, shift_amt):
 def save_tensor_as_txt(tensor, filename):
     np.savetxt(filename, tensor.cpu().detach().numpy().flatten(), fmt='%d')   
 
+def gen_linear(weight, bias, input, output, shift_amt):
+    os.makedirs("./pattern/linear/", exist_ok=True)
+    #analysis_tensor(weight, "l2qw")
+
+    weight = weight.cpu().detach().numpy()
+    bias   =   bias.cpu().detach().numpy()
+    input  =  input.cpu().detach().numpy()
+    output = output.cpu().detach().numpy()
+
+    #we need to reshape the weights to meet the SRAM size!
+    weight = weight.reshape((8000, 16))
+    input  =  input.reshape((80, 16))
+    output = output.flatten()
+    #bias
+    with open("./pattern/linear/bias.txt", 'w') as f:
+        flatten_bias = bias.flatten().astype(np.int16).tolist()
+        data = '\n'.join(map(str, flatten_bias))
+        f.write(data + '\n')
+    
+    with open("./pattern/linear/bias_b.txt", 'w') as f:
+        flatten_bias = bias.flatten().astype(np.int16).tolist()
+        formatted_bias = []
+        for x in flatten_bias:
+            if x >= 0:
+                formatted_bias.append('0' + format(np.int16(x), '015b'))
+            else:
+                formatted_bias.append('1' + format(np.int16(x + pow(2, 15)), '015b'))
+        data = '\n'.join(map(str, formatted_bias))
+        f.write(data + '\n')
+    #weights
+    with open("./pattern/linear/weight_b.txt", 'w') as f:
+        for i in range(weight.shape[0]):
+            formatted_row = []
+            for j in range(weight.shape[1]):
+                byte_value = np.int8(weight[i, j])
+                if byte_value >= 0:
+                    formatted_row.append('0' + format(byte_value, '07b'))
+                else:
+                    formatted_row.append('1' + format(byte_value + 128, '07b'))
+            data = ''.join(formatted_row)
+            f.write(data + '\n')
+
+    #input
+    with open("./pattern/linear/input_b.txt", 'w') as f:
+        for i in range(weight.shape[0]):
+            formatted_row = []
+            for j in range(weight.shape[1]):
+                byte_value = np.int8(weight[i, j])
+                if byte_value >= 0:
+                    formatted_row.append('0' + format(byte_value, '07b'))
+                else:
+                    formatted_row.append('1' + format(byte_value + 128, '07b'))
+            data = ''.join(formatted_row)
+            f.write(data + '\n')
+    
+    with open("./pattern/linear/output.txt", 'w') as f:
+        for i in range(output.shape[0]):
+            data = str(int(output[i]))
+            f.write(data + '\n')
 
 
     
@@ -308,13 +371,17 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     #==========================================================
     return output, output_quantized
 
+
+
+
+
 def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=False):
     weights = layer.state_dict()['weight']
     bias = layer.state_dict()['bias']
 
     quantized_weights, s_weight = quantize_tensor_signed(weights, q_range_signed)
-    quantized_bias, s_bias = quantize_tensor_signed(bias, 4)
     quantized_input, s_input = quantize_tensor_unsigned(input, q_range_unsigned)
+    quantized_bias             = torch.round(bias / (s_weight * s_input))
 
     reconstructed_weights = quantized_weights * s_weight
     #reconstructed_bias = quantized_bias * s_bias
@@ -324,9 +391,9 @@ def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=
 
     output = (layer(input))
     #output = None
-    output_quantized = (s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1))
-    o = quantized_layer(quantized_input) + torch.round(bias.view(1, -1) * pow(2, 11))
-    print(o)
+    output_quantized = (s_input * s_weight * (quantized_layer(quantized_input) + quantized_bias.view(1, -1)))
+    o = quantized_layer(quantized_input) + quantized_bias
+    #print(o)
     #print("comparison between unq and q: ")
     #analysis_tensor(weights, "unq_linear")
     #analysis_tensor(quantized_weights, "q_linear")
@@ -334,7 +401,8 @@ def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=
     #analysis_tensor(input, "input_before_linear")
 
     if gen_pattern:
-        generate_pattern(quantized_weights, quantized_bias, quantized_input, o)
+        gen_linear(quantized_weights, quantized_bias, quantized_input, o, 11)
+        print(quantized_weights.shape)
         #deal with output per 16 channels to generate the testcase
 
     return output, output_quantized
