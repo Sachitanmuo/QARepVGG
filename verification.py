@@ -3,7 +3,7 @@ import numpy as np
 OUT_SIZE = 56
 CHANNEL = 48
 
-# 讀取 golden 值
+
 with open("./pattern/layer2/output_b.txt", 'r') as f:
     golden = np.zeros((1, CHANNEL, OUT_SIZE, OUT_SIZE))
     x, y, channel_index = 0, 0, 0

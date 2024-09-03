@@ -249,15 +249,17 @@ def quantize_1st_layer(layer, input):
     
     quantized_weights, s_weight = quantize_tensor_signed(weights, 8)
     quantized_bias, s_bias = None, None
-    if bias is not None:
-        quantized_bias, s_bias = quantize_tensor_signed(bias, 2)
     quantized_input, s_input = quantize_tensor_signed(input, 4)
+    if bias is not None:
+        quantized_bias = torch.round(bias / (s_input * s_weight))
 
+
+    print(f"bias q range :{(1/(s_input*s_weight))}")
     reconstructed_weights = quantized_weights * s_weight
-    if quantized_bias is not None:
-        reconstructed_bias = quantized_bias * s_bias
-    else:
-        reconstructed_bias = None
+    #if quantized_bias is not None:
+    #    reconstructed_bias = quantized_bias * s_bias
+    #else:
+    #    reconstructed_bias = None
     output = nn.ReLU()(layer.rbr_reparam(input))
     
     quantized_layer = nn.Conv2d(layer.rbr_reparam.in_channels, layer.rbr_reparam.out_channels, layer.rbr_reparam.kernel_size, 
@@ -267,7 +269,7 @@ def quantize_1st_layer(layer, input):
     #    quantized_layer.bias.data = quantized_bias
     #print(quantized_layer(quantized_input).shape)
     #print(bias.shape)
-    output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
+    output_quantized = nn.ReLU()(s_input * s_weight * (quantized_layer(quantized_input) + quantized_bias.view(1, -1, 1, 1)))
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
     return output, output_quantized
 
@@ -277,15 +279,13 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     
     quantized_weights, s_weight = quantize_tensor_signed(weights, q_range_signed)
     quantized_bias, s_bias = None, None
-    if bias is not None:
-        quantized_bias, s_bias = quantize_tensor_signed(bias, 4)
     quantized_input, s_input = quantize_tensor_unsigned(input, q_range_unsigned)
+    if bias is not None:
+        quantized_bias = torch.round(bias / (s_input * s_weight))
+
+    
 
     reconstructed_weights = quantized_weights * s_weight
-    if quantized_bias is not None:
-        reconstructed_bias = quantized_bias * s_bias
-    else:
-        reconstructed_bias = None
     output = nn.ReLU()(layer.rbr_reparam(input))
     #output = None
     quantized_layer = nn.Conv2d(layer.rbr_reparam.in_channels, layer.rbr_reparam.out_channels, layer.rbr_reparam.kernel_size, 
@@ -294,7 +294,7 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     #if reconstructed_bias is not None:
     #    quantized_layer.bias.data = quantized_bias
     
-    output_quantized = nn.ReLU()(s_input * s_weight * quantized_layer(quantized_input) + bias.view(1, -1, 1, 1))
+    output_quantized = nn.ReLU()(s_input * s_weight * (quantized_layer(quantized_input) + quantized_bias.view(1, -1, 1, 1)))
     o = nn.ReLU()(quantized_layer(quantized_input))
     if gen_pattern:
         generate_pattern(quantized_weights, bias, quantized_input, o, 11)
@@ -447,8 +447,10 @@ def quantized_model_(model, image):
 
     #========== Average Pooling ==========
     #_, output_quantized = quantize_layer(model.stage4[0], output_quantized)
-    #output = model.gap(output)
+    #output = model.gap(output)output_quantized = torch.round(output_quantized * pow(2, 13))
+    output_quantized = torch.round(output_quantized * pow(2, 13))
     output_quantized = model.gap(output_quantized)
+    output_quantized = output_quantized / pow(2, 13)
     #analysis_tensor(output, "x")
     #analysis_tensor(output_quantized, "x")
     #================================
@@ -468,5 +470,4 @@ def quantized_model_(model, image):
 
 
     
-
 
