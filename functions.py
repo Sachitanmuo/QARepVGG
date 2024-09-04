@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import os
 import seaborn as sns
 import numpy as np
+import math
 
 def flatten_and_format(state_dict):
     state_dict = state_dict.cpu().detach().numpy().astype(np.int16)
@@ -38,37 +39,35 @@ def flatten_and_format_binary(data, data_type):
                 formatted_data.append('1' + format(np.int16(32768 + x), '015b'))
         return ' '.join(formatted_data)
     
-def generate_pattern(weight, bias, input, output, shift_amt):
-    os.makedirs("./pattern/layer2/", exist_ok=True)
+def generate_pattern(weight, bias, input, output, shift_amt, name=None):
+    filename = "./pattern/" + name + "/"
+    os.makedirs(filename, exist_ok=True)
     #analysis_tensor(weight, "l2qw")
     bias = bias * pow(2, shift_amt)
     bias = torch.round(bias)
-    save_tensor_as_txt(input, "./pattern/layer2/I.txt")
-
+    #save_tensor_as_txt(input, "./pattern/layer2/I.txt")
 
     weight = weight.cpu().detach().numpy()
-    bias   =   bias.cpu().detach().numpy()
-    input  =  input.cpu().detach().numpy()
+    bias = bias.cpu().detach().numpy()
+    input = input.cpu().detach().numpy()
     output = output.cpu().detach().numpy()
 
     weight_0 = weight[0::2, :, :, :]
     weight_1 = weight[1::2, :, :, :]
 
-
     out_channels, in_channels, kernel_h, kernel_w = weight.shape
     in_size = input.shape[2]
     out_size = output.shape[2]
-    print(weight_0.shape)
 
-    with open("./pattern/layer2/weight.txt", 'w') as f:
-        for i in range (out_channels):
+    with open(filename + "weight.txt", 'w') as f:
+        for i in range(out_channels):
             for j in range(in_channels):
                 flatten_weight = weight[i, j].flatten().astype(np.int8).tolist()
                 data = ' '.join(map(str, flatten_weight))
                 f.write(data + '\n')
-    
-    with open("./pattern/layer2/weight_b.txt", 'w') as f:
-        for i in range (out_channels):
+
+    with open(filename + "weight_b.txt", 'w') as f:
+        for i in range(out_channels):
             for j in range(in_channels):
                 flatten_weight = weight[i, j].flatten().tolist()
                 formatted_weight = []
@@ -80,8 +79,8 @@ def generate_pattern(weight, bias, input, output, shift_amt):
                 data = ''.join(map(str, formatted_weight))
                 f.write(data + '\n')
 
-    with open("./pattern/layer2/weight%0_b.txt", 'w') as f:
-        for i in range (weight_0.shape[0]):
+    with open(filename + "weight%0_b.txt", 'w') as f:
+        for i in range(weight_0.shape[0]):
             for j in range(weight_0.shape[1]):
                 flatten_weight = weight_0[i, j].flatten().tolist()
                 formatted_weight = []
@@ -93,8 +92,8 @@ def generate_pattern(weight, bias, input, output, shift_amt):
                 data = ''.join(map(str, formatted_weight))
                 f.write(data + '\n')
 
-    with open("./pattern/layer2/weight%1_b.txt", 'w') as f:
-        for i in range (weight_1.shape[0]):
+    with open(filename + "weight%1_b.txt", 'w') as f:
+        for i in range(weight_1.shape[0]):
             for j in range(weight_1.shape[1]):
                 flatten_weight = weight_1[i, j].flatten().tolist()
                 formatted_weight = []
@@ -105,13 +104,13 @@ def generate_pattern(weight, bias, input, output, shift_amt):
                         formatted_weight.append('1' + format(np.int8(x + 128), '07b'))
                 data = ''.join(map(str, formatted_weight))
                 f.write(data + '\n')
-            
-    with open("./pattern/layer2/bias.txt", 'w') as f:
+
+    with open(filename + "bias.txt", 'w') as f:
         flatten_bias = bias.flatten().astype(np.int16).tolist()
         data = '\n'.join(map(str, flatten_bias))
         f.write(data + '\n')
-    
-    with open("./pattern/layer2/bias_b.txt", 'w') as f:
+
+    with open(filename + "bias_b.txt", 'w') as f:
         flatten_bias = bias.flatten().astype(np.int16).tolist()
         formatted_bias = []
         for x in flatten_bias:
@@ -122,16 +121,16 @@ def generate_pattern(weight, bias, input, output, shift_amt):
         data = '\n'.join(map(str, formatted_bias))
         f.write(data + '\n')
 
-    with open("./pattern/layer2/output.txt", 'w') as f:
-        for i in range (out_size):
-            for j in range (out_size):
+    with open(filename + "output.txt", 'w') as f:
+        for i in range(out_size):
+            for j in range(out_size):
                 flatten_output = output[:, :, i, j].flatten().astype(np.int16).tolist()
                 data = ' '.join(map(str, flatten_output))
                 f.write(data + '\n')
 
-    with open("./pattern/layer2/output_b.txt", 'w') as f:
-        for i in range (out_size):
-            for j in range (out_size):
+    with open(filename + "output_b.txt", 'w') as f:
+        for i in range(out_size):
+            for j in range(out_size):
                 flatten_output = output[:, :, i, j].flatten().astype(np.int16).tolist()
                 formatted_output = []
                 for x in flatten_output:
@@ -141,50 +140,34 @@ def generate_pattern(weight, bias, input, output, shift_amt):
                         formatted_output.append('1' + format(np.int16(x + 32768), '015b'))
                 data = ''.join(map(str, formatted_output))
                 f.write(data + '\n')
-    #Seperate the channel into 3 parts
-    input_split = []
-    for i in range (3):
-        input_split.append(input[:, 16*i: 16*(i+1), :, :])
-    h0_w0 = input_split[0][:, :, 0::2, 0::2]
-    h0_w1 = input_split[0][:, :, 0::2, 1::2]
-    h1_w0 = input_split[0][:, :, 1::2, 0::2]
-    h1_w1 = input_split[0][:, :, 1::2, 1::2]
-    def repeat(tensor, file):
-        with open(file, 'w') as f:
-            for i in range (tensor.shape[2]):
-                #print(tensor.shape[2])
-                for j in range (tensor.shape[3]):
-                    #print(tensor.shape[2])
-                    flatten_input = tensor[:, :, i, j].flatten().astype(np.uint8).tolist()
-                    formatted_input = []
-                    for x in flatten_input:
-                        #formatted_input.append(format(np.uint8(x), '08b'))
-                        formatted_input.append(x)
-                    data = ' '.join(map(str, formatted_input))
-                    f.write(data + '\n')
-    repeat(h0_w0, "./pattern/layer2/input_cgroup0h_0w_0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup0h_0w_1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup0h_1w_0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup0h_1w_1.txt")
-    
-    h0_w0 = input_split[1][:, :, 0::2, 0::2]
-    h0_w1 = input_split[1][:, :, 0::2, 1::2]
-    h1_w0 = input_split[1][:, :, 1::2, 0::2]
-    h1_w1 = input_split[1][:, :, 1::2, 1::2]
-    repeat(h0_w0, "./pattern/layer2/input_cgroup1h_0w_0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup1h_0w_1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup1h_1w_0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup1h_1w_1.txt")
 
-    h0_w0 = input_split[2][:, :, 0::2, 0::2]
-    h0_w1 = input_split[2][:, :, 0::2, 1::2]
-    h1_w0 = input_split[2][:, :, 1::2, 0::2]
-    h1_w1 = input_split[2][:, :, 1::2, 1::2]
+    # Separate the channels into groups of 16 and generate the corresponding files
+    num_channels = input.shape[1]
+    num_groups = num_channels // 16
+    input_split = [input[:, 16*i:16*(i+1), :, :] for i in range(num_groups)]
+    print(num_channels)
+    print(num_groups)
+    for group_idx in range(num_groups):
+        h0_w0 = input_split[group_idx][:, :, 0::2, 0::2]
+        h0_w1 = input_split[group_idx][:, :, 0::2, 1::2]
+        h1_w0 = input_split[group_idx][:, :, 1::2, 0::2]
+        h1_w1 = input_split[group_idx][:, :, 1::2, 1::2]
 
-    repeat(h0_w0, "./pattern/layer2/input_cgroup2h_0w_0.txt")
-    repeat(h0_w1, "./pattern/layer2/input_cgroup2h_0w_1.txt")
-    repeat(h1_w0, "./pattern/layer2/input_cgroup2h_1w_0.txt")
-    repeat(h1_w1, "./pattern/layer2/input_cgroup2h_1w_1.txt")
+        def repeat(tensor, file):
+            with open(file, 'w') as f:
+                for i in range(tensor.shape[2]):
+                    for j in range(tensor.shape[3]):
+                        flatten_input = tensor[:, :, i, j].flatten().astype(np.uint8).tolist()
+                        formatted_input = []
+                        for x in flatten_input:
+                            formatted_input.append(x)
+                        data = ' '.join(map(str, formatted_input))
+                        f.write(data + '\n')
+
+        repeat(h0_w0, f"{filename}input_cgroup{group_idx}h_0w_0.txt")
+        repeat(h0_w1, f"{filename}input_cgroup{group_idx}h_0w_1.txt")
+        repeat(h1_w0, f"{filename}input_cgroup{group_idx}h_1w_0.txt")
+        repeat(h1_w1, f"{filename}input_cgroup{group_idx}h_1w_1.txt")
 
 def save_tensor_as_txt(tensor, filename):
     np.savetxt(filename, tensor.cpu().detach().numpy().flatten(), fmt='%d')   
@@ -306,10 +289,10 @@ def analysis_tensor(tensor, filename):
     plt.savefig("./plots/" + filename)
     plt.close()
 
-def quantize_1st_layer(layer, input):
+def quantize_1st_layer(layer, input, gen_pattern = False, name = None):
     weights = layer.rbr_reparam.state_dict()['weight']
     bias = layer.rbr_reparam.state_dict().get('bias', None)
-    
+    print(name)
     quantized_weights, s_weight = quantize_tensor_signed(weights, 8)
     quantized_bias, s_bias = None, None
     quantized_input, s_input = quantize_tensor_signed(input, 4)
@@ -334,9 +317,12 @@ def quantize_1st_layer(layer, input):
     #print(bias.shape)
     output_quantized = nn.ReLU()(s_input * s_weight * (quantized_layer(quantized_input) + quantized_bias.view(1, -1, 1, 1)))
     #print(f"s_input:{s_input}, s_weight:{s_weight}, 2^-5:{2**(-5)}")
+
+    if(gen_pattern):
+        generate_pattern(quantized_weights, quantized_bias, quantized_input, output_quantized, shift_amt= math.log((s_input * s_weight), 2), name = name)
     return output, output_quantized
 
-def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern = False):
+def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern = False, name = None):
     weights = layer.rbr_reparam.state_dict()['weight']
     bias = layer.rbr_reparam.state_dict().get('bias', None)
     
@@ -360,7 +346,7 @@ def quantize_layer(layer, input, q_range_unsigned, q_range_signed, gen_pattern =
     output_quantized = nn.ReLU()(s_input * s_weight * (quantized_layer(quantized_input) + quantized_bias.view(1, -1, 1, 1)))
     o = nn.ReLU()(quantized_layer(quantized_input))
     if gen_pattern:
-        generate_pattern(quantized_weights, bias, quantized_input, o, 11)
+        generate_pattern(quantized_weights, bias, quantized_input, o, math.log((s_input * s_weight), 2), name = name)
         save_tensor_as_txt(quantized_input, './pattern/algorithm/quantized_input.txt')
         if quantized_bias is not None:
             save_tensor_as_txt(quantized_bias, './pattern/algorithm/quantized_bias.txt')
@@ -406,9 +392,6 @@ def quantize_linear(layer, input, q_range_unsigned, q_range_signed, gen_pattern=
         #deal with output per 16 channels to generate the testcase
 
     return output, output_quantized
-
-
-
 
 
 def summ(model):

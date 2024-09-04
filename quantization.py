@@ -47,7 +47,7 @@ def main():
     #summ(model)
     #print(quantized_model(model, image).shape)
     #print(model(image).shape)
-
+    '''
     with torch.no_grad():
         output = model.stage0(image)
         analysis_tensor(output, "stage0_output")
@@ -99,7 +99,6 @@ def main():
         output = model.linear(output)
         analysis_tensor(output, "linear")
     #input()
-
     # =========Test the input quantization error=============
     #      input quantization error:0.0003388968762010336
     #========================================================
@@ -107,13 +106,13 @@ def main():
     #error = torch.sum(torch.mean((image - quantized_input * s)**2))
     #print(f"input quantization error:{error}")
 
-
+    '''
     # =========Test the first layer quantization error=============
     #      Quantization MSE: 0.3397901952266693
     #      Quantization Absolute Error: 0.39588701725006104
     #==============================================================
     print("========== Stage 0 ==========")
-    output, output_quantized = quantize_1st_layer(model.stage0, image)
+    output, output_quantized = quantize_1st_layer(model.stage0, image, gen_pattern=True, name="layer1")
     #error_calc(output, output_quantized)
     #input()
     print("=============================")
@@ -126,12 +125,13 @@ def main():
     #print(f"Quantization Error After ReLU: {error}")
     #input()
     #Stage 1
+    name = ["layer2", "layer3"]
     print("========== Stage 1 ==========")
-    _, output_quantized = quantize_layer(model.stage1[0], output_quantized, q_range_unsigned= 16, q_range_signed= 1, gen_pattern = True)
+    _, output_quantized = quantize_layer(model.stage1[0], output_quantized, q_range_unsigned= 16, q_range_signed= 1, gen_pattern = True, name = "layer2")
     output = model.stage1[0](output)
     error_calc(output, output_quantized)
-    #input()
-    _, output_quantized = quantize_layer(model.stage1[1], output_quantized, q_range_unsigned= 8, q_range_signed= 4, gen_pattern = False)
+    input()
+    _, output_quantized = quantize_layer(model.stage1[1], output_quantized, q_range_unsigned= 8, q_range_signed= 4, gen_pattern = True, name = "layer3")
     output = model.stage1[1](output)
     error_calc(output, output_quantized)
     #input()
@@ -139,16 +139,18 @@ def main():
     
     print("========== Stage 2 ==========")
     q_list = [0.5, 2, 2, 2]
+    name_list = ["layer4", "layer5", "layer6", "layer7"]
     for i in range (0, 4):
-        _, output_quantized = quantize_layer(model.stage2[i], output_quantized, q_range_unsigned= 8, q_range_signed= q_list[i], gen_pattern = False)
+        _, output_quantized = quantize_layer(model.stage2[i], output_quantized, q_range_unsigned= 8, q_range_signed= q_list[i], gen_pattern = True, name = name_list[i])
         output = model.stage2[i](output)
         error_calc(output, output_quantized)
         #input()
     print("=============================")
     
+    name_list = ["layer8", "layer9", "layer10", "layer11", "layer12", "layer13", "layer14", "layer15", "layer16", "layer17", "layer18", "layer19", "layer20", "layer21"]
     print("========== Stage 3 ==========")
     for i in range (0, 14):
-        _, output_quantized = quantize_layer(model.stage3[i], output_quantized, q_range_unsigned= 8, q_range_signed= 1, gen_pattern = False)
+        _, output_quantized = quantize_layer(model.stage3[i], output_quantized, q_range_unsigned= 8, q_range_signed= 1, gen_pattern = True, name = name_list[i])
         output = model.stage3[i](output)
         error_calc(output, output_quantized)
         #input()
@@ -156,7 +158,7 @@ def main():
 
     #input()
     print("========== Stage 4 ==========")
-    _, output_quantized = quantize_layer(model.stage4[0], output_quantized, q_range_unsigned= 8, q_range_signed= 1, gen_pattern = False)
+    _, output_quantized = quantize_layer(model.stage4[0], output_quantized, q_range_unsigned= 8, q_range_signed= 1, gen_pattern = True, name = "layer22")
     output = model.stage4[0](output)
     error_calc(output, output_quantized)
     #input()
